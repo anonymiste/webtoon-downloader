@@ -10,13 +10,29 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-// 1) Servir les fichiers statiques (index.html, app.js, style.css)
+// 1) Servir les fichiers index.html, app.js, style.css
 app.use(express.static(__dirname));
-
-// 2) Route racine -> index.html
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "index.html"));
 });
+
+// ====== health & diag ======
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+app.get("/diag", (_req, res) => {
+  const webtoonPath = path.join(__dirname, "webtoon.js");
+  res.json({
+    node: process.version,
+    cwd: process.cwd(),
+    exists_webtoon_js: fs.existsSync(webtoonPath),
+    webtoon_path: webtoonPath,
+    env: {
+      PUPPETEER_EXECUTABLE_PATH: !!process.env.PUPPETEER_EXECUTABLE_PATH,
+      CHROME_PATH: !!process.env.CHROME_PATH,
+      PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR || null
+    }
+  });
+});
+
 
 // ====== util nom de dossier ======
 function dirFromUrlSmart(href) {
@@ -200,22 +216,6 @@ app.get("/result/:jobId", (req, res) => {
   res.download(job.pdfPath, job.fileName);
 });
 
-// ====== health & diag ======
-app.get("/healthz", (_req, res) => res.status(200).send("ok"));
-app.get("/diag", (_req, res) => {
-  const webtoonPath = path.join(__dirname, "webtoon.js");
-  res.json({
-    node: process.version,
-    cwd: process.cwd(),
-    exists_webtoon_js: fs.existsSync(webtoonPath),
-    webtoon_path: webtoonPath,
-    env: {
-      PUPPETEER_EXECUTABLE_PATH: !!process.env.PUPPETEER_EXECUTABLE_PATH,
-      CHROME_PATH: !!process.env.CHROME_PATH,
-      PUPPETEER_CACHE_DIR: process.env.PUPPETEER_CACHE_DIR || null
-    }
-  });
-});
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🌐 Backend prêt sur http://localhost:${PORT}`));

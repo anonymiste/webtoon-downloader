@@ -1,0 +1,17 @@
+{
+  "name": "webtoon-downloader",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.19.2",
+    "pdfkit": "^0.15.0",
+    "puppeteer": "^22.10.0",
+    "sanitize-filename": "^1.6.3",
+    "sharp": "^0.33.3"
+  }
+}

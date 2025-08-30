@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>Webtoon Downloader</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>📚 Webtoon Downloader</h1>
+
+      <div class="col">
+        <label>URL de l’épisode</label>
+        <input id="url" type="text" placeholder="Colle l’URL (Webtoons ou autre)…" />
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="row">
+        <div class="col">
+          <label class="muted">Attente initiale (ms)</label>
+          <input id="wait" type="number" min="0" step="100" value="0" />
+        </div>
+        <div class="col" style="display:flex;align-items:flex-end;">
+          <label class="check">
+            <input id="debug" type="checkbox" /> Debug (ouvre la page sur le serveur)
+          </label>
+        </div>
+      </div>
+
+      <div class="spacer"></div>
+
+      <div class="controls">
+        <button id="start" class="btn primary">Lancer</button>
+        <button id="download" class="btn dis" disabled>Télécharger</button>
+        <span id="filename" class="muted"></span>
+      </div>
+
+      <div id="status" class="status"></div>
+      <div id="logs" class="logs"></div>
+
+      <p class="muted" style="margin-top:10px;">
+        Backend attendu: <code>http://localhost:4000</code> — lance <code>node server.js</code> avant.
+      </p>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

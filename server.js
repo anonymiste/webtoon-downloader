@@ -33,7 +33,6 @@ app.get("/diag", (_req, res) => {
   });
 });
 
-
 // ====== util nom de dossier ======
 function dirFromUrlSmart(href) {
   const _sanitize = (s) =>
@@ -108,6 +107,7 @@ function dirFromUrlSmart(href) {
 const clients = new Map(); // jobId -> Set(res)
 const jobs = new Map();    // jobId -> { status, pdfPath, outDir, fileName, errorMessage }
 
+// émettre aux abonnés SSE
 function sendEvent(jobId, event) {
   const subs = clients.get(jobId);
   if (!subs) return;
@@ -135,6 +135,14 @@ app.get("/events/:jobId", (req, res) => {
   });
 });
 
+// ====== helper persistance meta ======
+function saveMeta(job) {
+  try {
+    const metaPath = path.join(job.outDir, "meta.json");
+    fs.writeFileSync(metaPath, JSON.stringify(job, null, 2));
+  } catch {}
+}
+
 // ====== Lancement job ======
 app.post("/start", (req, res) => {
   try {
@@ -155,7 +163,10 @@ app.post("/start", (req, res) => {
     const fileName = `${seriesDir}.pdf`;
     const pdfPath = path.join(outDir, fileName);
     fs.mkdirSync(outDir, { recursive: true });
-    jobs.set(jobId, { status: "started", pdfPath, outDir, fileName, errorMessage: null });
+
+    const initMeta = { status: "started", pdfPath, outDir, fileName, errorMessage: null };
+    jobs.set(jobId, initMeta);
+    saveMeta(initMeta);
 
     const args = [scriptPath, url, outDir, fileName];
     if (debug) args.push("--debug");
@@ -167,7 +178,10 @@ app.post("/start", (req, res) => {
     let stderrBuf = "";
     child.on("error", (err) => {
       console.error("spawn error:", err);
-      jobs.set(jobId, { ...jobs.get(jobId), status: "error", errorMessage: "Spawn error: " + err.message });
+      const j = jobs.get(jobId) || initMeta;
+      const withErr = { ...j, status: "error", errorMessage: "Spawn error: " + err.message };
+      jobs.set(jobId, withErr);
+      saveMeta(withErr);
       sendEvent(jobId, "__ERROR__");
     });
 
@@ -184,15 +198,21 @@ app.post("/start", (req, res) => {
     child.on("close", (code) => {
       const ok = code === 0 && fs.existsSync(pdfPath);
       if (ok) {
-        jobs.set(jobId, { ...jobs.get(jobId), status: "done" });
+        const j = jobs.get(jobId) || initMeta;
+        const done = { ...j, status: "done" };
+        jobs.set(jobId, done);
+        saveMeta(done);
         sendEvent(jobId, "📄 PDF généré : " + pdfPath);
         sendEvent(jobId, "__DONE__");
       } else {
+        const j = jobs.get(jobId) || initMeta;
         const msg =
           /Could not find Chrome/i.test(stderrBuf) ? "Chromium introuvable (forcer le download au build : postinstall + clear cache)"
           : /net::ERR_/i.test(stderrBuf) ? "Erreur réseau/chargement de page (URL bloquée, consentement cookies, etc.)"
           : stderrBuf.split("\n").slice(-5).join(" ").trim() || "Erreur inconnue dans le job";
-        jobs.set(jobId, { ...jobs.get(jobId), status: "error", errorMessage: msg });
+        const errJ = { ...j, status: "error", errorMessage: msg };
+        jobs.set(jobId, errJ);
+        saveMeta(errJ);
         sendEvent(jobId, "__ERROR__");
       }
     });
@@ -202,9 +222,28 @@ app.post("/start", (req, res) => {
   }
 });
 
-// ====== status & download ======
+// ====== status (avec relecture disque si redémarrage) & download ======
 app.get("/status/:jobId", (req, res) => {
-  const job = jobs.get(req.params.jobId);
+  const { jobId } = req.params;
+  let job = jobs.get(jobId);
+
+  if (!job) {
+    try {
+      const jobRoot = path.join(__dirname, "jobs", jobId);
+      if (fs.existsSync(jobRoot)) {
+        const dirs = fs.readdirSync(jobRoot, { withFileTypes: true }).filter(d => d.isDirectory());
+        for (const d of dirs) {
+          const metaP = path.join(jobRoot, d.name, "meta.json");
+          if (fs.existsSync(metaP)) {
+            job = JSON.parse(fs.readFileSync(metaP, "utf8"));
+            jobs.set(jobId, job); // rehydrate
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+
   if (!job) return res.status(404).json({ status: "unknown" });
   res.json({ status: job.status, fileName: job.fileName, errorMessage: job.errorMessage });
 });
@@ -216,54 +255,5 @@ app.get("/result/:jobId", (req, res) => {
   res.download(job.pdfPath, job.fileName);
 });
 
-const metaPath = path.join(outDir, "meta.json");
-const meta = { jobId, status: "started", pdfPath, outDir, fileName, errorMessage: null };
-
-fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-jobs.set(jobId, meta);
-
-function saveMeta(job) {
-  try {
-    const p = path.join(job.outDir, "meta.json");
-    fs.writeFileSync(p, JSON.stringify(job, null, 2));
-  } catch {}
-}
-
-// quand tu passes en "done"
-const done = { ...jobs.get(jobId), status: "done" };
-jobs.set(jobId, done);
-saveMeta(done);
-
-// quand tu passes en "error"
-const errJ = { ...jobs.get(jobId), status: "error", errorMessage: msg };
-jobs.set(jobId, errJ);
-saveMeta(errJ);
-
-app.get("/status/:jobId", (req, res) => {
-  const { jobId } = req.params;
-  let job = jobs.get(jobId);
-  if (!job) {
-    // lookup disque: jobs/<jobId>/*/meta.json
-    try {
-      const jobRoot = path.join(__dirname, "jobs", jobId);
-      if (fs.existsSync(jobRoot)) {
-        const dirs = fs.readdirSync(jobRoot, { withFileTypes: true }).filter(d => d.isDirectory());
-        for (const d of dirs) {
-          const metaP = path.join(jobRoot, d.name, "meta.json");
-          if (fs.existsSync(metaP)) {
-            job = JSON.parse(fs.readFileSync(metaP, "utf8"));
-            jobs.set(jobId, job); // rehydrate en mémoire
-            break;
-          }
-        }
-      }
-    } catch {}
-  }
-  if (!job) return res.status(404).json({ status: "unknown" });
-  res.json({ status: job.status, fileName: job.fileName, errorMessage: job.errorMessage });
-});
-
-
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🌐 Backend prêt sur http://localhost:${PORT}`));
-

@@ -1,11 +1,10 @@
 {
-  "name": "webtoon-downloader",
+  "name": "webtoon2pdf",
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
   "engines": { "node": "20.x" },
   "scripts": {
-    "postinstall": "npx puppeteer browsers install chrome",
     "start": "node server.js"
   },
   "dependencies": {

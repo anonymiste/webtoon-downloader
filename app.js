@@ -1,4 +1,4 @@
-const BACKEND = localStorage.getItem("webtoon_backend") || "http://localhost:4000";
+const BACKEND = "https://webtoon-downloader.onrender.com";
 
 // UI refs
 const $url = document.getElementById("url");

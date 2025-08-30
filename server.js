@@ -216,6 +216,54 @@ app.get("/result/:jobId", (req, res) => {
   res.download(job.pdfPath, job.fileName);
 });
 
+const metaPath = path.join(outDir, "meta.json");
+const meta = { jobId, status: "started", pdfPath, outDir, fileName, errorMessage: null };
+
+fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
+jobs.set(jobId, meta);
+
+function saveMeta(job) {
+  try {
+    const p = path.join(job.outDir, "meta.json");
+    fs.writeFileSync(p, JSON.stringify(job, null, 2));
+  } catch {}
+}
+
+// quand tu passes en "done"
+const done = { ...jobs.get(jobId), status: "done" };
+jobs.set(jobId, done);
+saveMeta(done);
+
+// quand tu passes en "error"
+const errJ = { ...jobs.get(jobId), status: "error", errorMessage: msg };
+jobs.set(jobId, errJ);
+saveMeta(errJ);
+
+app.get("/status/:jobId", (req, res) => {
+  const { jobId } = req.params;
+  let job = jobs.get(jobId);
+  if (!job) {
+    // lookup disque: jobs/<jobId>/*/meta.json
+    try {
+      const jobRoot = path.join(__dirname, "jobs", jobId);
+      if (fs.existsSync(jobRoot)) {
+        const dirs = fs.readdirSync(jobRoot, { withFileTypes: true }).filter(d => d.isDirectory());
+        for (const d of dirs) {
+          const metaP = path.join(jobRoot, d.name, "meta.json");
+          if (fs.existsSync(metaP)) {
+            job = JSON.parse(fs.readFileSync(metaP, "utf8"));
+            jobs.set(jobId, job); // rehydrate en mémoire
+            break;
+          }
+        }
+      }
+    } catch {}
+  }
+  if (!job) return res.status(404).json({ status: "unknown" });
+  res.json({ status: job.status, fileName: job.fileName, errorMessage: job.errorMessage });
+});
+
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🌐 Backend prêt sur http://localhost:${PORT}`));
+

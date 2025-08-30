@@ -173,8 +173,13 @@ app.post("/start", (req, res) => {
     if (wait && Number(wait) > 0) args.push(`--wait=${Number(wait)}`);
 
     console.log("Spawning:", process.execPath, args.join(" "));
-    const child = spawn(process.execPath, args, { cwd: __dirname });
-
+    const child = spawn(process.execPath, [
+      path.join(__dirname, "webtoon.js"),
+      url, outDir, fileName,
+      ...(debug ? ["--debug"] : []),
+      ...(wait && Number(wait) > 0 ? [`--wait=${Number(wait)}`] : [])
+    ], { cwd: __dirname });
+    
     let stderrBuf = "";
     child.on("error", (err) => {
       console.error("spawn error:", err);

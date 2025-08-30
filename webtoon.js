@@ -8,38 +8,41 @@ const sharp = require('sharp');
 const sanitize = require('sanitize-filename');
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-/** ---- Config de base ---- */
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
 
-function getChromePath() {
-  const p =
-    process.env.PUPPETEER_EXECUTABLE_PATH ||
-    process.env.CHROME_PATH ||
-    puppeteer.executablePath();
-  console.log('ℹ️ Chromium path choisi :', p);
-  return p;
-}
+(async () => {
+  /** ---- Config de base ---- */
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
+  
+  function getChromePath() {
+    const p =
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      process.env.CHROME_PATH ||
+      puppeteer.executablePath();
+    console.log('ℹ️ Chromium path choisi :', p);
+    return p;
+  }
 
 // ...
-const browser = await puppeteer.launch({
-  headless: true,
-  executablePath: puppeteer.executablePath(), // ← indispensable
-  args: [
-    '--no-sandbox',
-    '--disable-setuid-sandbox',
-    '--disable-dev-shm-usage',
-    '--disable-gpu',
-    '--no-zygote',
-    '--single-process'
-  ],
-  defaultViewport: { width: 1280, height: 1800 },
-});
-
-/* ---------- CLI helpers ---------- */
-function parseCliArgs(argv) {
-  let url = '', outDir = 'images', pdfName = 'episode.pdf', debug = false, wait = 0;
-  const rest = [];
-  for (const a of argv.slice(2)) {
+  
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: puppeteer.executablePath(), // ← indispensable
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process'
+    ],
+    defaultViewport: { width: 1280, height: 1800 },
+  });
+  
+  /* ---------- CLI helpers ---------- */
+  function parseCliArgs(argv) {
+    let url = '', outDir = 'images', pdfName = 'episode.pdf', debug = false, wait = 0;
+    const rest = [];
+    for (const a of argv.slice(2)) {
     if (a === '--debug') { debug = true; continue; }
     if (a.startsWith('--wait=')) { wait = Number(a.split('=')[1] || 0); continue; }
     rest.push(a);
@@ -56,10 +59,10 @@ function parseCliArgs(argv) {
 
 function dirFromUrlSmart(href) {
   const _san = (s) => s.normalize('NFKD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9]+/gi, '-')
-    .replace(/-+/g, '-').replace(/^-|-$/g, '')
-    .toLowerCase().slice(0, 80);
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/gi, '-')
+  .replace(/-+/g, '-').replace(/^-|-$/g, '')
+  .toLowerCase().slice(0, 80);
   const isMean = (t) => t && !['viewer','read','reader','manga','comic','webtoon','webtoons','series','title','chapters','chapter','episode','ep','view','fr','en','es','ko'].includes(t.toLowerCase());
   try {
     const u = new URL(href);
@@ -185,14 +188,14 @@ async function downloadViaPuppeteer(page, images, outputDir) {
   const saved = [];
   const want = new Map(images.map(i => [i.src, i]));
   const pending = new Map();
-
+  
   const nameFor = (url, idx) => {
     const base = path.basename(new URL(url).pathname);
     const ext = (base.split('.').pop() || '').toLowerCase();
     const n = String(idx).padStart(4,'0');
     return ['jpg','jpeg','png','webp','avif'].includes(ext) ? `${n}.${ext}` : `${n}.jpg`;
   };
-
+  
   const onResp = async (response) => {
     try {
       if (response.request().resourceType() !== 'image') return;
@@ -215,9 +218,9 @@ async function downloadViaPuppeteer(page, images, outputDir) {
       pending.set(url, p);
     } catch {}
   };
-
+  
   page.on('response', onResp);
-
+  
   for (const { src } of images) {
     await page.evaluate(async (s) => {
       try {
@@ -229,11 +232,11 @@ async function downloadViaPuppeteer(page, images, outputDir) {
       } catch {}
     }, src);
   }
-
+  
   await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(()=>{});
   await Promise.all([...pending.values()]);
   page.off('response', onResp);
-
+  
   return saved.sort();
 }
 
@@ -241,9 +244,9 @@ async function downloadViaPuppeteer(page, images, outputDir) {
 async function screenshotFallback(page, outDir) {
   const fs = require('fs');
   const path = require('path');
-
+  
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
-
+  
   // Hauteur totale de la page
   const total = await page.evaluate(() =>
     Math.max(
@@ -252,33 +255,33 @@ async function screenshotFallback(page, outDir) {
       document.body.clientHeight, document.documentElement.clientHeight
     )
   );
-
+  
   // Viewport et step (tu peux mettre un petit chevauchement si besoin)
   let vp = { height: 1800, width: 1280 };
   try { vp = await page.viewport(); } catch {}
   const step = vp.height;         // hauteur de défilement
   const overlap = 40;              // ex: 40 si tu veux un léger recouvrement
-
+  
   let y = 0, idx = 0;
   const parts = [];
-
+  
   while (y < total) {
     // Scroll à la position y
     await page.evaluate((_y)=>window.scrollTo(0,_y), y);
     await sleep(300);
-
+    
     const fname = path.join(outDir, `shot_${String(idx).padStart(4, '0')}.png`);
     await page.screenshot({ path: fname, fullPage: false });
     parts.push(fname);
-
+    
     idx++;
     const next = y + step - overlap;
     if (next <= y) break;    // garde-fou
     y = next;
-
+    
     if (idx > 1000) break;   // hard safety
   }
-
+  
   console.log(`💾 ${parts.length} captures sauvegardées (fallback rafale).`);
   return parts;
 }
@@ -290,39 +293,39 @@ async function imagesToPdf(files, pdfPath) {
   const fs = require('fs');
   const sharp = require('sharp');
   const path = require('path');
-
+  
   const doc = new PDFDocument({ autoFirstPage: false });
   const stream = fs.createWriteStream(pdfPath);
   doc.pipe(stream);
-
+  
   for (const f of files) {
     try {
       const meta = await sharp(f).metadata();
       const w = meta.width, h = meta.height;
       if (!w || !h) throw new Error('Missing dimensions');
-
+      
       let final = f;
       const lower = f.toLowerCase();
       if (!lower.endsWith('.jpg') && !lower.endsWith('.jpeg') && !lower.endsWith('.png')) {
         final = f.replace(/\.[^.]+$/, '.png');
         await sharp(f).png().toFile(final);
       }
-
+      
       doc.addPage({ size: [w, h], margins: { top:0, left:0, right:0, bottom:0 } });
       doc.image(final, 0, 0, { width: w, height: h });
     } catch (e) {
       console.log(`⚠️ Skip: ${f} - ${e.message}`);
     }
   }
-
+  
   doc.end();
-
+  
   // ➜ attendre que le PDF soit bien écrit
   await new Promise((resolve, reject) => {
     stream.on('finish', resolve);
     stream.on('error', reject);
   });
-
+  
   // ➜ maintenant, supprimer les images
   for (const f of files) {
     try {
@@ -336,37 +339,39 @@ async function imagesToPdf(files, pdfPath) {
 (async () => {
   const { url, outDirArg, pdfName, debug, wait } = parseCliArgs(process.argv);
   const finalUrl = normalizeUrl(url);
-
+  
   const outDir = (outDirArg && outDirArg !== 'images') ? outDirArg : dirFromUrlSmart(finalUrl);
   const finalPdf = (pdfName && pdfName !== 'episode.pdf') ? pdfName : (path.basename(outDir) + '.pdf');
   const pdfPath = path.join(outDir, finalPdf);
-
+  
   const page = await browser.newPage();
   await page.setUserAgent(UA);
-
+  
   console.log(`🌐 ${finalUrl}`);
   await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 0 });
   if (wait > 0) await sleep(wait);
-
+  
   const images = await collectAllImages(page);
   console.log(`📸 ${images.length} images détectées (après tri). Téléchargement…`);
-
+  
   let files = await downloadViaPuppeteer(page, images, outDir);
   console.log(`✅ ${files.length}/${images.length} sauvegardées.`);
-
-if (!files.length) {
-  console.log('⚠️ Aucune image récupérée — fallback multi-captures…');
-  files = await screenshotFallback(page, outDir);   // ← renvoie la liste des shots
-}
-
+  
+  if (!files.length) {
+    console.log('⚠️ Aucune image récupérée — fallback multi-captures…');
+    files = await screenshotFallback(page, outDir);   // ← renvoie la liste des shots
+  }
+  
   if (!files.length) {
     console.log('⚠️ Aucune image récupérée — fallback screenshots scroll…');
     files = await screenshotFallback(page, outDir);
   }
-
+  
   console.log('🧩 Construction PDF depuis', files.length, 'image(s) →', pdfPath);
   await imagesToPdf(files, pdfPath);
   console.log(`📄 PDF généré : ${pdfPath}`);
-
+  
   await browser.close();
 })().catch(e => { console.error('Erreur:', e); process.exit(1); });
+
+})();

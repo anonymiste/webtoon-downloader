@@ -9,7 +9,6 @@ const fs = require("fs");
 const app = express();
 app.use(cors());
 app.use(express.json());
-const path = require("path");
 
 // 1) Servir les fichiers statiques (index.html, app.js, style.css)
 app.use(express.static(__dirname));

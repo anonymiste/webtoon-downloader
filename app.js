@@ -1,4 +1,5 @@
-const BACKEND = "https://webtoon-downloader.onrender.com";
+// FRONT—app.js
+const BACKEND = window.location.origin; // auto pour Render ou local
 
 // UI refs
 const $url = document.getElementById("url");
@@ -66,11 +67,18 @@ async function startJob() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ url, wait, debug })
     });
+
     if (!res.ok) {
+      let msg = "Erreur de démarrage backend";
+      try {
+        const j = await res.json();
+        if (j?.error) msg = j.error;
+      } catch {}
       setBusy(false);
-      setStatus("❌ Erreur de démarrage backend", "err");
+      setStatus("❌ " + msg, "err");
       return;
     }
+
     const data = await res.json();
     jobId = data.jobId;
     fileName = data.fileName || "episode.pdf";
@@ -81,18 +89,12 @@ async function startJob() {
     if (es) { es.close(); es = null; }
     es = new EventSource(`${BACKEND}/events/${jobId}`);
 
-    es.onopen = () => {
-      log("🔌 Connexion SSE ouverte");
-    };
-
-    es.onerror = () => {
-      log("⚠️ Erreur SSE (fallback polling)");
-    };
+    es.onopen = () => log("🔌 Connexion SSE ouverte");
+    es.onerror = () => log("⚠️ Erreur SSE (fallback polling)");
 
     es.onmessage = (ev) => {
       const msg = ev.data;
 
-      // Active dès qu'on voit "PDF généré : ..."
       if (msg.startsWith("📄 PDF généré :") || msg.startsWith("PDF généré :")) {
         setStatus("✅ Terminé", "ok");
         setDownloadingReady(true);
@@ -105,6 +107,7 @@ async function startJob() {
         setBusy(false);
         es.close();
       } else if (msg === "__ERROR__") {
+        // le polling précisera l'errorMessage
         setStatus("❌ Erreur pendant le traitement", "err");
         setBusy(false);
         es.close();
@@ -129,7 +132,7 @@ async function startJob() {
             return;
           }
           if (j.status === "error") {
-            setStatus("❌ Erreur pendant le traitement", "err");
+            setStatus("❌ " + (j.errorMessage || "Erreur pendant le traitement"), "err");
             setBusy(false);
             pollStop = true;
             return;

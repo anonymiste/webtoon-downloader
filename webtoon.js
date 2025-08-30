@@ -11,6 +11,30 @@ const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 /** ---- Config de base ---- */
 const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
 
+function getChromePath() {
+  const p =
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    puppeteer.executablePath();
+  console.log('ℹ️ Chromium path choisi :', p);
+  return p;
+}
+
+// ...
+const browser = await puppeteer.launch({
+  headless: 'new',
+  executablePath: getChromePath(),
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-zygote',
+    '--single-process'
+  ],
+  defaultViewport: { width: 1280, height: 1800 },
+});
+
 /* ---------- CLI helpers ---------- */
 function parseCliArgs(argv) {
   let url = '', outDir = 'images', pdfName = 'episode.pdf', debug = false, wait = 0;
@@ -317,11 +341,6 @@ async function imagesToPdf(files, pdfPath) {
   const finalPdf = (pdfName && pdfName !== 'episode.pdf') ? pdfName : (path.basename(outDir) + '.pdf');
   const pdfPath = path.join(outDir, finalPdf);
 
-  const browser = await puppeteer.launch({
-    headless: debug ? false : 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1280, height: 1800 },
-  });
   const page = await browser.newPage();
   await page.setUserAgent(UA);
 

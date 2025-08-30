@@ -2,8 +2,8 @@
   "name": "webtoon2pdf",
   "private": true,
   "type": "commonjs",
-  "engines": { "node": "20.x" },
-  "scripts": {
+  "version": "1.0.0",
+    "scripts": {
     "postinstall": "npx --yes puppeteer@22.10.0 browsers install chrome",
     "start": "node server.js"
   },

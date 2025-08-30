@@ -22,8 +22,8 @@ function getChromePath() {
 
 // ...
 const browser = await puppeteer.launch({
-  headless: 'new',
-  executablePath: getChromePath(),
+  headless: true,
+  executablePath: puppeteer.executablePath(), // ← indispensable
   args: [
     '--no-sandbox',
     '--disable-setuid-sandbox',

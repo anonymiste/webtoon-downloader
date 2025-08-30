@@ -3,8 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "commonjs",
+  "engines": { "node": "20.x" },
   "scripts": {
-    "postinstall": "node node_modules/puppeteer/install.mjs",
+    "postinstall": "npx puppeteer browsers install chrome",
     "start": "node server.js"
   },
   "dependencies": {

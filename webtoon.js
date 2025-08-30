@@ -317,11 +317,29 @@ async function imagesToPdf(files, pdfPath) {
   const finalPdf = (pdfName && pdfName !== 'episode.pdf') ? pdfName : (path.basename(outDir) + '.pdf');
   const pdfPath = path.join(outDir, finalPdf);
 
-  const browser = await puppeteer.launch({
-    headless: debug ? false : 'new',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    defaultViewport: { width: 1280, height: 1800 },
-  });
+
+function getChromePath() {
+  // ordre de priorité : variable env Render > var Chrome path > binaire Puppeteer
+  return (
+    process.env.PUPPETEER_EXECUTABLE_PATH ||
+    process.env.CHROME_PATH ||
+    puppeteer.executablePath()
+  );
+}
+
+const browser = await puppeteer.launch({
+  headless: 'new',
+  executablePath: getChromePath(),
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-gpu',
+    '--no-zygote',
+    '--single-process'
+  ],
+  defaultViewport: { width: 1280, height: 1800 },
+});
   const page = await browser.newPage();
   await page.setUserAgent(UA);
 

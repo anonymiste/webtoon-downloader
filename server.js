@@ -133,7 +133,7 @@ app.get("/events/:jobId", (req, res) => {
     clients.get(jobId)?.delete(res);
     if (clients.get(jobId)?.size === 0) clients.delete(jobId);
   });
-});
+}); // <-- on ferme BIEN la route SSE ici
 
 // ====== helper persistance meta ======
 function saveMeta(job) {
@@ -162,7 +162,10 @@ app.post("/start", (req, res) => {
     const outDir = path.join(__dirname, "jobs", jobId, seriesDir);
     const fileName = `${seriesDir}.pdf`;
     const pdfPath = path.join(outDir, fileName);
-    fs.mkdirSync(outDir, { recursive: true });
+
+    fs.mkdirSync(outDir, { recursive: true }); // créer d'abord le dossier
+    const logErrPath = path.join(outDir, "stderr.log");
+    fs.writeFileSync(logErrPath, ""); // reset log d'erreur du job
 
     const initMeta = { status: "started", pdfPath, outDir, fileName, errorMessage: null };
     jobs.set(jobId, initMeta);
@@ -173,14 +176,10 @@ app.post("/start", (req, res) => {
     if (wait && Number(wait) > 0) args.push(`--wait=${Number(wait)}`);
 
     console.log("Spawning:", process.execPath, args.join(" "));
-    const child = spawn(process.execPath, [
-      path.join(__dirname, "webtoon.js"),
-      url, outDir, fileName,
-      ...(debug ? ["--debug"] : []),
-      ...(wait && Number(wait) > 0 ? [`--wait=${Number(wait)}`] : [])
-    ], { cwd: __dirname });
-    
+    const child = spawn(process.execPath, args, { cwd: __dirname });
+
     let stderrBuf = "";
+
     child.on("error", (err) => {
       console.error("spawn error:", err);
       const j = jobs.get(jobId) || initMeta;
@@ -197,29 +196,40 @@ app.post("/start", (req, res) => {
     child.stderr.on("data", (chunk) => {
       const s = chunk.toString();
       stderrBuf += s;
-      sendEvent(jobId, "ERR: " + s);
+      try { fs.appendFileSync(logErrPath, s); } catch {}
+      // en SSE, on push des lignes bien séparées
+      for (const line of s.split(/\r?\n/)) {
+        if (line.trim()) sendEvent(jobId, "ERR: " + line);
+      }
     });
 
-    child.on("close", (code) => {
+    child.on("close", (code, signal) => {
       const ok = code === 0 && fs.existsSync(pdfPath);
       if (ok) {
         const j = jobs.get(jobId) || initMeta;
         const done = { ...j, status: "done" };
         jobs.set(jobId, done);
         saveMeta(done);
-        sendEvent(jobId, "📄 PDF généré : " + pdfPath);
+        sendEvent(jobId, `📄 PDF généré : ${pdfPath}`);
         sendEvent(jobId, "__DONE__");
-      } else {
-        const j = jobs.get(jobId) || initMeta;
-        const msg =
-          /Could not find Chrome/i.test(stderrBuf) ? "Chromium introuvable (forcer le download au build : postinstall + clear cache)"
-          : /net::ERR_/i.test(stderrBuf) ? "Erreur réseau/chargement de page (URL bloquée, consentement cookies, etc.)"
-          : stderrBuf.split("\n").slice(-5).join(" ").trim() || "Erreur inconnue dans le job";
-        const errJ = { ...j, status: "error", errorMessage: msg };
-        jobs.set(jobId, errJ);
-        saveMeta(errJ);
-        sendEvent(jobId, "__ERROR__");
+        return;
       }
+
+      // Construire un message d'erreur solide
+      const tail = stderrBuf.split(/\r?\n/).slice(-15).join("\n").trim();
+      let msg =
+        /Could not find Chrome/i.test(stderrBuf) ? "Chromium introuvable (vérifie l’install Puppeteer)"
+        : /ERR_NAME_NOT_RESOLVED|ERR_BLOCKED_BY_CLIENT|ERR_CONNECTION/i.test(stderrBuf) ? "Erreur réseau/chargement (URL, consentement cookies, adblock)"
+        : tail || `Process exited with code=${code}, signal=${signal}`;
+
+      const j = jobs.get(jobId) || initMeta;
+      const errJ = { ...j, status: "error", errorMessage: msg };
+      jobs.set(jobId, errJ);
+      saveMeta(errJ);
+
+      // Lien vers le log sur disque pour lecture complète
+      sendEvent(jobId, `ERR: Voir le log: ${logErrPath}`);
+      sendEvent(jobId, "__ERROR__");
     });
   } catch (e) {
     console.error("/start exception:", e);
@@ -260,5 +270,29 @@ app.get("/result/:jobId", (req, res) => {
   res.download(job.pdfPath, job.fileName);
 });
 
-const PORT = process.env.PORT || 4000;
-app.listen(PORT, () => console.log(`🌐 Backend prêt sur http://localhost:${PORT}`));
+// ====== boot ======
+const PORT = Number(process.env.PORT) || 4000;
+
+process.on('unhandledRejection', (err) => {
+  console.error('UNHANDLED REJECTION:', err);
+});
+process.on('uncaughtException', (err) => {
+  console.error('UNCAUGHT EXCEPTION:', err);
+  process.exit(1);
+});
+
+console.log('🟡 Booting server…');
+
+try {
+  const server = app.listen(PORT, '0.0.0.0', () => {
+    console.log(`✅ Server running at http://localhost:${PORT}`);
+  });
+
+  server.on('error', (err) => {
+    console.error('❌ app.listen error:', err && err.code ? err.code : err);
+    process.exit(1);
+  });
+} catch (e) {
+  console.error('❌ listen threw:', e);
+  process.exit(1);
+}

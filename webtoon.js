@@ -7,51 +7,122 @@ const PDFDocument = require('pdfkit');
 const sharp = require('sharp');
 const sanitize = require('sanitize-filename');
 
-const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-process.on('unhandledRejection', (e) => {
-  console.error('UNHANDLED REJECTION:', e && e.stack || e);
-  process.exitCode = 1;
-});
-process.on('uncaughtException', (e) => {
-  console.error('UNCAUGHT EXCEPTION:', e && e.stack || e);
-  process.exit(1);
-});
+(async () => {
+  
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  /** ---- Config de base ---- */
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
+  
+  function getChromePath() {
+    const p =
+      process.env.PUPPETEER_EXECUTABLE_PATH ||
+      process.env.CHROME_PATH ||
+      puppeteer.executablePath();
+    console.log('ℹ️ Chromium path choisi :', p);
+    return p;
+  }
 
-function parseArgs(argv) {
-  // node webtoon.js <URL> [outDir] [pdfName] [--debug] [--wait=ms]
-  const rest = [];
-  let debug = false;
-  let wait = 0;
-  for (const a of argv.slice(2)) {
+// ...
+  
+  const browser = await puppeteer.launch({
+    headless: true,
+    executablePath: puppeteer.executablePath(), // ← indispensable
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
+      '--no-zygote',
+      '--single-process'
+    ],
+    defaultViewport: { width: 1280, height: 1800 },
+  });
+  
+  /* ---------- CLI helpers ---------- */
+  function parseCliArgs(argv) {
+    let url = '', outDir = 'images', pdfName = 'episode.pdf', debug = false, wait = 0;
+    const rest = [];
+    for (const a of argv.slice(2)) {
     if (a === '--debug') { debug = true; continue; }
     if (a.startsWith('--wait=')) { wait = Number(a.split('=')[1] || 0); continue; }
     rest.push(a);
   }
-  if (!rest.length) {
+  if (rest.length === 0) {
     console.log('Usage: node webtoon.js <URL> [outDir] [pdfName] [--debug] [--wait=ms]');
     process.exit(1);
   }
-  const url = rest[0];
-  const outDir = rest[1] && !/\.pdf$/i.test(rest[1]) ? rest[1] : 'images';
-  const pdfName = rest[2] && /\.pdf$/i.test(rest[2])
-    ? rest[2]
-    : (rest[1] && /\.pdf$/i.test(rest[1]) ? rest[1] : 'episode.pdf');
-  return { url, outDir, pdfName, debug, wait };
+  url = rest[0];
+  if (rest[1]) { if (/\.pdf$/i.test(rest[1])) pdfName = rest[1]; else outDir = rest[1]; }
+  if (rest[2]) { if (/\.pdf$/i.test(rest[2])) pdfName = rest[2]; else outDir = rest[2]; }
+  return { url, outDirArg: outDir, pdfName, debug, wait };
 }
 
+function dirFromUrlSmart(href) {
+  const _san = (s) => s.normalize('NFKD')
+  .replace(/[\u0300-\u036f]/g, '')
+  .replace(/[^a-z0-9]+/gi, '-')
+  .replace(/-+/g, '-').replace(/^-|-$/g, '')
+  .toLowerCase().slice(0, 80);
+  const isMean = (t) => t && !['viewer','read','reader','manga','comic','webtoon','webtoons','series','title','chapters','chapter','episode','ep','view','fr','en','es','ko'].includes(t.toLowerCase());
+  try {
+    const u = new URL(href);
+    const parts = u.pathname.split('/').filter(Boolean).map(decodeURIComponent);
+    const L = parts.length;
+    const rx = [/(ep|episode)[\s\-_]*([0-9]+)$/i, /(ch|chap|chapter)[\s\-_]*([0-9]+)$/i, /^([0-9]+)$/i];
+    let epToken = '';
+    for (let i = L-1; i>=0 && !epToken; i--) {
+      for (const r of rx) {
+        const m = parts[i].match(r);
+        if (m) { const num = m[2] || m[1]; const tag=(m[1]||'').toLowerCase(); const p=/chap|chapter|ch/i.test(tag)?'ch':'ep'; epToken=`${p}${num}`; break; }
+      }
+    }
+    if (!epToken) {
+      const q = ['episode_no','ep','episode','chapter','ch'].map(k=>u.searchParams.get(k)).find(v=>v && /^\d+$/.test(v));
+      if (q) epToken = `ep${q}`;
+    }
+    let series = '';
+    if (epToken) {
+      let epIdx = -1;
+      for (let i=L-1;i>=0 && epIdx===-1;i--) {
+        if (new RegExp(epToken.replace(/^ep/i,'(ep|episode)').replace(/^ch/i,'(ch|chap|chapter)'),'i').test(parts[i])) epIdx=i;
+      }
+      const cand = (epIdx>0?parts.slice(0,epIdx):parts).filter(isMean);
+      const tail = cand.slice(-2).filter(isMean);
+      series = _san(tail.join('-')) || 'episode';
+    } else {
+      const tail = parts.filter(isMean).slice(-2);
+      series = _san(tail.join('-')) || 'episode';
+    }
+    let base = series;
+    if (epToken) {
+      const epSan = _san(epToken);
+      if (!new RegExp(`(^|-)${epSan}(-|$)`).test(base)) base += `-${epSan}`;
+    }
+    return base || 'episode';
+  } catch { return 'episode'; }
+}
+
+function normalizeUrl(input) {
+  if (!input) throw new Error('URL manquante');
+  try { return new URL(input).href; } catch {}
+  if (/^viewer\?/i.test(input) || /^\/?viewer\?/i.test(input)) return 'https://www.webtoons.com/en/viewer?' + input.replace(/^\/?viewer\?/, '');
+  if (input.startsWith('/')) return 'https://www.webtoons.com' + input;
+  return 'https://' + input;
+}
+
+/* ---------- page helpers ---------- */
 async function autoScroll(frame) {
   await frame.evaluate(async () => {
-    const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+    const sleep = (ms)=>new Promise(r=>setTimeout(r,ms));
     let last = 0, stable = 0;
-    for (let i = 0; i < 150; i++) {
+    for (let i=0;i<150;i++) {
       window.scrollBy(0, window.innerHeight);
-      await delay(400);
+      await sleep(400);
       const h = document.scrollingElement.scrollHeight;
       if (h === last) { if (++stable >= 3) break; } else { stable = 0; last = h; }
     }
-    window.scrollTo(0, 0);
+    window.scrollTo(0,0);
   });
 }
 
@@ -61,12 +132,11 @@ async function collectFromFrame(frame) {
       try {
         const parts = srcset.split(',').map(s => s.trim());
         const parsed = parts.map(p => {
-          const [u, sz] = p.split(/\s+/);
-          const val = sz?.endsWith('w') ? parseInt(sz) :
-                      sz?.endsWith('x') ? parseFloat(sz) * 1000 : 0;
+          const [u, sz] = p.split(/\\s+/);
+          const val = sz?.endsWith('w') ? parseInt(sz) : sz?.endsWith('x') ? parseFloat(sz)*1000 : 0;
           return { u, val };
         });
-        parsed.sort((a,b) => b.val - a.val);
+        parsed.sort((a,b)=>b.val-a.val);
         const best = parsed[0]?.u || '';
         return best ? new URL(best, location.href).href : '';
       } catch { return ''; }
@@ -75,50 +145,58 @@ async function collectFromFrame(frame) {
     const push = (src, rect) => {
       if (!src) return;
       try { src = new URL(src, location.href).href; } catch {}
-      if (rect.width > 50 && rect.height > 50) {
-        items.push({ src: src.split('#')[0], y: Math.round(rect.top + scrollY) });
-      }
+      if (rect.width > 50 && rect.height > 50) items.push({ src: src.split('#')[0], y: Math.round(rect.top + scrollY) });
     };
     document.querySelectorAll('img').forEach(img => {
       const rect = img.getBoundingClientRect();
       let final = img.currentSrc || img.src || '';
-      const srcset = img.getAttribute('srcset');
-      if (srcset) final = pickLargestFromSrcset(srcset) || final;
+      const ss = img.getAttribute('srcset');
+      if (ss) final = pickLargestFromSrcset(ss) || final;
       push(final, rect);
     });
     document.querySelectorAll('source[srcset]').forEach(s => {
-      const rect = s.parentElement?.getBoundingClientRect?.() || {width:0,height:0,top:0};
-      const ss = s.getAttribute('srcset');
-      if (ss) push(pickLargestFromSrcset(ss), rect);
+      const rect = s.parentElement?.getBoundingClientRect?.() || { width:0, height:0, top:0 };
+      push(pickLargestFromSrcset(s.getAttribute('srcset')), rect);
     });
     document.querySelectorAll('*').forEach(el => {
       const bg = getComputedStyle(el).backgroundImage || '';
-      const m = bg.match(/url\((['"]?)(.*?)\1\)/);
+      const m = bg.match(/url\\((['"]?)(.*?)\\1\\)/);
       if (m && m[2]) push(m[2], el.getBoundingClientRect());
     });
     const seen = new Set(); const out = [];
-    items.sort((a,b)=>a.y-b.y).forEach(it => { if (!seen.has(it.src)) { seen.add(it.src); out.push(it); }});
+    items.sort((a,b)=>a.y-b.y).forEach(it=>{ if(!seen.has(it.src)){ seen.add(it.src); out.push(it); } });
     return out;
   });
 }
 
 async function collectAllImages(page) {
   await autoScroll(page.mainFrame());
+  for (const fr of page.frames()) {
+    if (fr === page.mainFrame()) continue;
+    try { await autoScroll(fr); } catch {}
+  }
   let all = [];
   for (const fr of page.frames()) {
     try { all = all.concat(await collectFromFrame(fr)); } catch {}
   }
   const seen = new Set(); const out = [];
-  all.sort((a,b)=>a.y-b.y).forEach(it => { if (!seen.has(it.src)) { seen.add(it.src); out.push(it); }});
-  return out.map((it, i) => ({ ...it, idx: i }));
+  all.sort((a,b)=>a.y-b.y).forEach(it=>{ if(!seen.has(it.src)){ seen.add(it.src); out.push(it); } });
+  return out.map((it,i)=>({ ...it, idx:i }));
 }
 
-async function downloadViaNetwork(page, images, outDir) {
-  if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+async function downloadViaPuppeteer(page, images, outputDir) {
+  if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
   const saved = [];
   const want = new Map(images.map(i => [i.src, i]));
   const pending = new Map();
-
+  
+  const nameFor = (url, idx) => {
+    const base = path.basename(new URL(url).pathname);
+    const ext = (base.split('.').pop() || '').toLowerCase();
+    const n = String(idx).padStart(4,'0');
+    return ['jpg','jpeg','png','webp','avif'].includes(ext) ? `${n}.${ext}` : `${n}.jpg`;
+  };
+  
   const onResp = async (response) => {
     try {
       if (response.request().resourceType() !== 'image') return;
@@ -126,34 +204,51 @@ async function downloadViaNetwork(page, images, outDir) {
       const meta = want.get(url); if (!meta || pending.has(url)) return;
       const p = (async () => {
         const buf = await response.buffer();
-        let out = path.join(outDir, `${String(meta.idx).padStart(4,'0')}.png`);
-        await sharp(buf).png().toFile(out);
+        let out = path.join(outputDir, nameFor(url, meta.idx));
+        const lower = out.toLowerCase();
+        if (lower.endsWith('.webp') || lower.endsWith('.avif')) {
+          out = out.replace(/\\.(webp|avif)$/i, '.png');
+          await sharp(buf).png({ compressionLevel: 9 }).toFile(out);
+        } else {
+          fs.writeFileSync(out, buf);
+        }
+        console.log('💾 Image sauvegardée :', out);
         saved.push(out);
         return out;
       })();
       pending.set(url, p);
     } catch {}
   };
-
+  
   page.on('response', onResp);
-
-  // force decode
+  
   for (const { src } of images) {
     await page.evaluate(async (s) => {
-      try { const img = new Image(); img.src = s; await img.decode().catch(()=>{}); } catch {}
+      try {
+        const el = new Image();
+        el.decoding = 'sync';
+        el.referrerPolicy = 'no-referrer-when-downgrade';
+        el.src = new URL(s, location.href).href;
+        await el.decode().catch(()=>{});
+      } catch {}
     }, src);
   }
-
+  
   await page.waitForNetworkIdle({ idleTime: 1500, timeout: 30000 }).catch(()=>{});
   await Promise.all([...pending.values()]);
   page.off('response', onResp);
-
-  saved.sort();
-  return saved;
+  
+  return saved.sort();
 }
 
+// Fallback : multi-captures successives, triées et renvoyées pour le PDF
 async function screenshotFallback(page, outDir) {
+  const fs = require('fs');
+  const path = require('path');
+  
   if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
+  
+  // Hauteur totale de la page
   const total = await page.evaluate(() =>
     Math.max(
       document.body.scrollHeight, document.documentElement.scrollHeight,
@@ -161,103 +256,123 @@ async function screenshotFallback(page, outDir) {
       document.body.clientHeight, document.documentElement.clientHeight
     )
   );
-  const vp = await page.viewport();
-  const step = (vp && vp.height) || 800;
-  let y = 0, idx = 0; const shots = [];
+  
+  // Viewport et step (tu peux mettre un petit chevauchement si besoin)
+  let vp = { height: 1800, width: 1280 };
+  try { vp = await page.viewport(); } catch {}
+  const step = vp.height;         // hauteur de défilement
+  const overlap = 40;              // ex: 40 si tu veux un léger recouvrement
+  
+  let y = 0, idx = 0;
+  const parts = [];
+  
   while (y < total) {
+    // Scroll à la position y
     await page.evaluate((_y)=>window.scrollTo(0,_y), y);
     await sleep(300);
-    const f = path.join(outDir, `shot_${String(idx).padStart(3,'0')}.png`);
-    await page.screenshot({ path: f, fullPage: false });
-    shots.push(f);
-    y += step; idx++;
-    if (idx > 500) break;
+    
+    const fname = path.join(outDir, `shot_${String(idx).padStart(4, '0')}.png`);
+    await page.screenshot({ path: fname, fullPage: false });
+    parts.push(fname);
+    
+    idx++;
+    const next = y + step - overlap;
+    if (next <= y) break;    // garde-fou
+    y = next;
+    
+    if (idx > 1000) break;   // hard safety
   }
-  // assemble
-  const metas = await Promise.all(shots.map(p => sharp(p).metadata()));
-  const width = Math.max(...metas.map(m => m.width || 0));
-  const height = metas.reduce((acc, m) => acc + (m.height || 0), 0);
-  const composite = [];
-  let offset = 0;
-  for (let i = 0; i < shots.length; i++) {
-    composite.push({ input: await sharp(shots[i]).toBuffer(), top: offset, left: 0 });
-    offset += metas[i].height || 0;
-  }
-  const stitched = path.join(outDir, 'stitched.png');
-  await sharp({ create: { width, height, channels: 4, background: '#ffffff' } })
-    .composite(composite).png().toFile(stitched);
-  return [stitched];
+  
+  console.log(`💾 ${parts.length} captures sauvegardées (fallback rafale).`);
+  return parts;
 }
 
+/** Construit le PDF avec pages à la taille exacte des images */
 async function imagesToPdf(files, pdfPath) {
   if (!files.length) throw new Error('No images to build PDF');
+  const PDFDocument = require('pdfkit');
+  const fs = require('fs');
+  const sharp = require('sharp');
+  const path = require('path');
+  
   const doc = new PDFDocument({ autoFirstPage: false });
+  const stream = fs.createWriteStream(pdfPath);
+  doc.pipe(stream);
+  
+  for (const f of files) {
+    try {
+      const meta = await sharp(f).metadata();
+      const w = meta.width, h = meta.height;
+      if (!w || !h) throw new Error('Missing dimensions');
+      
+      let final = f;
+      const lower = f.toLowerCase();
+      if (!lower.endsWith('.jpg') && !lower.endsWith('.jpeg') && !lower.endsWith('.png')) {
+        final = f.replace(/\.[^.]+$/, '.png');
+        await sharp(f).png().toFile(final);
+      }
+      
+      doc.addPage({ size: [w, h], margins: { top:0, left:0, right:0, bottom:0 } });
+      doc.image(final, 0, 0, { width: w, height: h });
+    } catch (e) {
+      console.log(`⚠️ Skip: ${f} - ${e.message}`);
+    }
+  }
+  
+  doc.end();
+  
+  // ➜ attendre que le PDF soit bien écrit
   await new Promise((resolve, reject) => {
-    const stream = fs.createWriteStream(pdfPath);
-    doc.pipe(stream);
     stream.on('finish', resolve);
     stream.on('error', reject);
-    (async () => {
-      for (const f of files) {
-        try {
-          const meta = await sharp(f).metadata();
-          const w = meta.width, h = meta.height;
-          if (!w || !h) throw new Error('Missing dimensions');
-          doc.addPage({ size: [w, h], margins: { top:0,left:0,right:0,bottom:0 } });
-          doc.image(f, 0, 0, { width: w, height: h });
-        } catch (e) {
-          console.log(`⚠️ Skip: ${f} - ${e.message}`);
-        }
-      }
-      doc.end();
-    })().catch(reject);
   });
+  
+  // ➜ maintenant, supprimer les images
+  for (const f of files) {
+    try {
+      fs.unlinkSync(f);
+      console.log(`🗑️ Supprimé : ${f}`);
+    } catch {}
+  }
 }
 
-(async function main() {
-  const { url, outDir, pdfName, debug, wait } = parseArgs(process.argv);
-
-  console.log(`🌐 ${url}`);
-  const browser = await puppeteer.launch({
-    headless: debug ? false : 'new',
-    args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--no-zygote',
-      '--single-process'
-    ],
-    defaultViewport: { width: 1280, height: 1800 }
-  });
+/* -------- MAIN -------- */
+(async () => {
+  const { url, outDirArg, pdfName, debug, wait } = parseCliArgs(process.argv);
+  const finalUrl = normalizeUrl(url);
+  
+  const outDir = (outDirArg && outDirArg !== 'images') ? outDirArg : dirFromUrlSmart(finalUrl);
+  const finalPdf = (pdfName && pdfName !== 'episode.pdf') ? pdfName : (path.basename(outDir) + '.pdf');
+  const pdfPath = path.join(outDir, finalPdf);
+  
   const page = await browser.newPage();
   await page.setUserAgent(UA);
-
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 0 });
+  
+  console.log(`🌐 ${finalUrl}`);
+  await page.goto(finalUrl, { waitUntil: 'domcontentloaded', timeout: 0 });
   if (wait > 0) await sleep(wait);
-
+  
   const images = await collectAllImages(page);
   console.log(`📸 ${images.length} images détectées (après tri). Téléchargement…`);
-
-  let files = await downloadViaNetwork(page, images, outDir);
+  
+  let files = await downloadViaPuppeteer(page, images, outDir);
   console.log(`✅ ${files.length}/${images.length} sauvegardées.`);
+  
   if (!files.length) {
-    console.log('⚠️ Aucune image récupérée — fallback screenshots…');
+    console.log('⚠️ Aucune image récupérée — fallback multi-captures…');
+    files = await screenshotFallback(page, outDir);   // ← renvoie la liste des shots
+  }
+  
+  if (!files.length) {
+    console.log('⚠️ Aucune image récupérée — fallback screenshots scroll…');
     files = await screenshotFallback(page, outDir);
   }
-
-  const pdfPath = path.join(outDir, sanitize(pdfName));
+  
+  console.log('🧩 Construction PDF depuis', files.length, 'image(s) →', pdfPath);
   await imagesToPdf(files, pdfPath);
   console.log(`📄 PDF généré : ${pdfPath}`);
-
-  // nettoyage des images pour ne garder que le PDF
-  try {
-    for (const f of files) { fs.unlinkSync(f); }
-  } catch {}
-
+  
   await browser.close();
-  process.exit(0);
-})().catch((e) => {
-  console.error('FATAL:', e && e.stack || e);
-  process.exit(1);
-});
+})().catch(e => { console.error('Erreur:', e); process.exit(1); });
+
+})();

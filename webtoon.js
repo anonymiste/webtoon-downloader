@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const puppeteer = require('puppeteer');
 const PDFDocument = require('pdfkit');
+try { require.resolve('sharp'); } catch { require.resolve('@img/sharp'); }
 const sharp = require('sharp');
 const sanitize = require('sanitize-filename');
 

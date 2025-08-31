@@ -1,11 +1,11 @@
-
-
 {
   "name": "webtoon2pdf",
   "private": true,
   "type": "commonjs",
   "version": "1.0.0",
-    "scripts": {
+  "engines": { "node": "20.x" },
+
+  "scripts": {
     "postinstall": "npx --yes puppeteer@22.10.0 browsers install chrome",
     "start": "node server.js"
   },
@@ -13,8 +13,24 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "pdfkit": "^0.15.0",
-    "puppeteer": "^22.10.0",
+    "puppeteer": "^22.15.0",
     "sanitize-filename": "^1.6.3",
     "sharp": "^0.33.3"
-  }
+  },
+  "description": "<!-- meCode --> # Webtoon Downloader (Frontend + Backend + Script)",
+  "main": "app.js",
+  "directories": {
+    "doc": "doc"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/anonymiste/webtoon-downloader.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/anonymiste/webtoon-downloader/issues"
+  },
+  "homepage": "https://github.com/anonymiste/webtoon-downloader#readme"
 }

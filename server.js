@@ -10,6 +10,13 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+try {
+  const pjson = require('puppeteer/package.json');
+  console.log('🧪 Puppeteer version at runtime:', pjson.version);
+} catch (e) {
+  console.log('🧪 Puppeteer version unknown at runtime:', e?.message);
+}
+
 // 1) Servir les fichiers index.html, app.js, style.css
 app.use(express.static(__dirname));
 app.get("/", (req, res) => {

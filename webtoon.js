@@ -9,7 +9,7 @@ const sanitize = require('sanitize-filename');
 
 
 (async () => {
-  
+
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   /** ---- Config de base ---- */
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
@@ -376,3 +376,5 @@ async function imagesToPdf(files, pdfPath) {
 })().catch(e => { console.error('Erreur:', e); process.exit(1); });
 
 })();
+
+// meCode

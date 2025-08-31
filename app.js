@@ -165,3 +165,7 @@ $download.addEventListener("click", downloadFile);
 $url.addEventListener("keydown", (e) => { if (e.key === "Enter") startJob(); });
 $filename.textContent = fileName ? `(${fileName})` : "";
 document.getElementById("jobid").textContent = jobId; // ajoute un petit span dans l'UI
+
+
+
+// meCode

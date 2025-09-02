@@ -13,7 +13,7 @@
     "cors": "^2.8.5",
     "express": "^4.19.2",
     "pdfkit": "^0.15.0",
-    "puppeteer": "^22.15.0",
+    "puppeteer": "^21.9.0",
     "sanitize-filename": "^1.6.3",
     "sharp": "^0.32.6"
   },

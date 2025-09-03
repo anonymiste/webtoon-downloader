@@ -28,7 +28,7 @@ const sanitize = require('sanitize-filename');
   
   const browser = await puppeteer.launch({
     headless: true,
-    executablePath: puppeteer.executablePath(), // ← indispensable
+    executablePath: '/usr/bin/chromium',              // ← indispensable
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',

@@ -6,7 +6,7 @@
   "engines": { "node": "20.x" },
 
   "scripts": {
-    "postinstall": "npx --yes puppeteer@22.10.0 browsers install chrome",
+    "postinstall": "npx puppeteer browsers install chrome",
     "start": "node server.js"
   },
   "dependencies": {

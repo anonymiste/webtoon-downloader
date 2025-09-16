@@ -1,0 +1,7 @@
+{
+  "status": "error",
+  "pdfPath": "C:\\projects\\script\\DwSc\\jobs\\1758057659014\\action-high-school-mercenary-ep226\\action-high-school-mercenary-ep226.pdf",
+  "outDir": "C:\\projects\\script\\DwSc\\jobs\\1758057659014\\action-high-school-mercenary-ep226",
+  "fileName": "action-high-school-mercenary-ep226.pdf",
+  "errorMessage": "Erreur: Error: Browser was not found at the configured executablePath (/usr/bin/google-chrome)\n    at ChromeLauncher.launch (C:\\projects\\script\\DwSc\\node_modules\\puppeteer-core\\lib\\cjs\\puppeteer\\node\\BrowserLauncher.js:89:19)\n    at async C:\\projects\\script\\DwSc\\webtoon.js:62:15"
+}

@@ -1,7 +1,6 @@
 const fs = require("fs");
 const path = require("path");
 const PDFDocument = require("pdfkit");
-try { require.resolve("sharp"); } catch { require.resolve("@img/sharp"); }
 const sharp = require("sharp");
 const puppeteer = require("puppeteer-core");
 const chromium = require("@sparticuz/chromium");
@@ -9,13 +8,15 @@ const chromium = require("@sparticuz/chromium");
 /**
  * Télécharge un webtoon et le convertit en PDF
  * @param {string} inputUrl - URL du webtoon
+ * @param {Object} options - { wait: number, debug: boolean }
  * @returns {string} pdfPath - chemin du PDF généré
  */
-async function downloadWebtoon(inputUrl) {
+async function downloadWebtoon(inputUrl, options = {}) {
   let browser;
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const { wait = 0, debug = false } = options;
 
-  /** ------------ helpers (copiés de ton code) ------------ */
+  // ---------- Helpers ----------
   function normalizeUrl(input) {
     if (!input) throw new Error("URL manquante");
     try {
@@ -29,7 +30,7 @@ async function downloadWebtoon(inputUrl) {
 
   async function autoScroll(frame) {
     await frame.evaluate(async () => {
-      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
       let last = 0, stable = 0;
       for (let i = 0; i < 150; i++) {
         window.scrollBy(0, window.innerHeight);
@@ -92,7 +93,7 @@ async function downloadWebtoon(inputUrl) {
     return pdfPath;
   }
 
-  /** ------------ MAIN ------------ */
+  // ---------- Main ----------
   try {
     const url = normalizeUrl(inputUrl);
 
@@ -100,20 +101,21 @@ async function downloadWebtoon(inputUrl) {
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
       executablePath: await chromium.executablePath(),
-      headless: chromium.headless
+      headless: !debug
     });
 
     const page = await browser.newPage();
     await page.goto(url, { waitUntil: "domcontentloaded", timeout: 0 });
-    await sleep(2000);
+    if (wait > 0) await sleep(wait);
 
     const images = await collectAllImages(page);
     console.log(`📸 ${images.length} images détectées`);
 
-    // Téléchargement local
-    const outDir = "downloads";
+    // Création du dossier downloads si nécessaire
+    const outDir = path.join(__dirname, "downloads");
     if (!fs.existsSync(outDir)) fs.mkdirSync(outDir, { recursive: true });
 
+    // Téléchargement des images
     const files = [];
     let idx = 0;
     for (const it of images) {
@@ -124,7 +126,7 @@ async function downloadWebtoon(inputUrl) {
       files.push(fname);
     }
 
-    const pdfPath = path.join(outDir, "episode.pdf");
+    const pdfPath = path.join(outDir, `episode.pdf`);
     await imagesToPdf(files, pdfPath);
 
     console.log(`📄 PDF généré: ${pdfPath}`);

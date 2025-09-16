@@ -10,22 +10,15 @@ const sanitize = require('sanitize-filename');
 
 
 (async () => {
+  let browser;
+  try {                              
 
   const sleep = (ms) => new Promise(r => setTimeout(r, ms));
   /** ---- Config de base ---- */
   const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
-  
-  function getChromePath() {
-    const p =
-      process.env.PUPPETEER_EXECUTABLE_PATH ||
-      process.env.CHROME_PATH ||
-      puppeteer.executablePath();
-    console.log('ℹ️ Chromium path choisi :', p);
-    return p;
-  }
 
 // ...
-  
+  const CHROME_PATH = process.env.CHROME_PATH || puppeteer.executablePath();
   const browser = await puppeteer.launch({
     headless: true,
     executablePath: puppeteer.executablePath(), // ← indispensable
@@ -338,7 +331,6 @@ async function imagesToPdf(files, pdfPath) {
 }
 
 /* -------- MAIN -------- */
-(async () => {
   const { url, outDirArg, pdfName, debug, wait } = parseCliArgs(process.argv);
   const finalUrl = normalizeUrl(url);
   
@@ -372,10 +364,13 @@ async function imagesToPdf(files, pdfPath) {
   console.log('🧩 Construction PDF depuis', files.length, 'image(s) →', pdfPath);
   await imagesToPdf(files, pdfPath);
   console.log(`📄 PDF généré : ${pdfPath}`);
-  
-  await browser.close();
-})().catch(e => { console.error('Erreur:', e); process.exit(1); });
 
+} catch (e) {
+    console.error('Erreorx:', e);
+    process.exit(1);
+  } finally {
+    if (browser) await browser.close();
+  }
 })();
 
 // meCode

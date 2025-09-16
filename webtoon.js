@@ -7,6 +7,46 @@ const PDFDocument = require('pdfkit');
 try { require.resolve('sharp'); } catch { require.resolve('@img/sharp'); }
 const sharp = require('sharp');
 const sanitize = require('sanitize-filename');
+const express = require("express");
+const cors = require("cors");
+const puppeteer = require("puppeteer-core");
+const chromium = require("@sparticuz/chromium");
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.use(cors());
+
+app.get("/", (req, res) => {
+  res.send("🚀 Webtoon Downloader API is running on Render with Chromium!");
+});
+
+app.get("/screenshot", async (req, res) => {
+  try {
+    const browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(),
+      headless: chromium.headless
+    });
+
+    const page = await browser.newPage();
+    await page.goto("https://example.com", { waitUntil: "networkidle2" });
+    const screenshot = await page.screenshot({ encoding: "base64" });
+
+    await browser.close();
+
+    res.send(`<img src="data:image/png;base64,${screenshot}" />`);
+  } catch (error) {
+    console.error("❌ Puppeteer error:", error);
+    res.status(500).send("Erreur Puppeteer: " + error.message);
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`✅ Server running on port ${PORT}`);
+});
+
 
 (async () => {
   let browser;

@@ -2,7 +2,6 @@
 /* eslint-disable no-console */
 const fs = require('fs');
 const path = require('path');
-const puppeteer = require('puppeteer-core');
 const PDFDocument = require('pdfkit');
 try { require.resolve('sharp'); } catch { require.resolve('@img/sharp'); }
 const sharp = require('sharp');

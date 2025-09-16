@@ -11,7 +11,7 @@
     "preinstall": "PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true",
     "install": "echo 'Skipping Puppeteer Chromium download on build'",
     "postinstall": "echo 'Skipping Puppeteer Chromium download on build'",
-    "start": "node app.js",
+    "start": "node webtoon.js",
     "dev": "nodemon app.js"
   },
   "dependencies": {

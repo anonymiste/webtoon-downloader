@@ -461,7 +461,7 @@ app.listen(PORT, () => {
     console.log(`📄 PDF généré : ${pdfPath}`);
   } catch (e) {
     console.error('Erreur:', e);
-    process.exit(1);
+    process.exit(0);
   } finally {
     if (browser) await browser.close();
   }

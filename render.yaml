@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: webtoon-downloader
+    env: node
+    plan: free
+    buildCommand: "npm install"
+    startCommand: "npm start"
+    nodeVersion: 20
+    envVars:
+      - key: PUPPETEER_EXECUTABLE_PATH
+        value: /opt/render/.cache/puppeteer/chrome/linux-*/chrome

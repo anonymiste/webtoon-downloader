@@ -1,7 +1,0 @@
-{
-  "status": "error",
-  "pdfPath": "C:\\projects\\script\\DwSc\\jobs\\1758057397764\\action-high-school-mercenary-ep226\\action-high-school-mercenary-ep226.pdf",
-  "outDir": "C:\\projects\\script\\DwSc\\jobs\\1758057397764\\action-high-school-mercenary-ep226",
-  "fileName": "action-high-school-mercenary-ep226.pdf",
-  "errorMessage": "at defaultResolveImpl (node:internal/modules/cjs/loader:1057:19)\n    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1062:22)\n    at Function._load (node:internal/modules/cjs/loader:1211:37)\n    at TracingChannel.traceSync (node:diagnostics_channel:322:14)\n    at wrapModuleLoad (node:internal/modules/cjs/loader:235:24)\n    at Module.require (node:internal/modules/cjs/loader:1487:12)\n    at require (node:internal/modules/helpers:135:16)\n    at Object.<anonymous> (C:\\projects\\script\\DwSc\\webtoon.js:5:21)\n    at Module._compile (node:internal/modules/cjs/loader:1730:14) {\n  code: 'MODULE_NOT_FOUND',\n  requireStack: [ 'C:\\\\projects\\\\script\\\\DwSc\\\\webtoon.js' ]\n}\n\nNode.js v22.16.0"
-}

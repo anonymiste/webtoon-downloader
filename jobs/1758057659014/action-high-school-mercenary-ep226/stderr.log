@@ -1,3 +1,0 @@
-Erreur: Error: Browser was not found at the configured executablePath (/usr/bin/google-chrome)
-    at ChromeLauncher.launch (C:\projects\script\DwSc\node_modules\puppeteer-core\lib\cjs\puppeteer\node\BrowserLauncher.js:89:19)
-    at async C:\projects\script\DwSc\webtoon.js:62:15

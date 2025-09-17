@@ -56,20 +56,27 @@ app.listen(PORT, () => {
     const UA =
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36';
 
-    // ➜ Utilise Chrome system (Render fournit /usr/bin/google-chrome)
-    const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome';
+      
+      // ➜ Utilise Chrome system (Render fournit /usr/bin/google-chrome)
+      // const CHROME_PATH = process.env.CHROME_PATH || '/usr/bin/google-chrome';
+      
+      // browser = await puppeteer.launch({
+        //   headless: true,
+        //   executablePath: CHROME_PATH,
+        //   args: [
+          //     '--no-sandbox',
+          //     '--disable-setuid-sandbox',
+          //     '--disable-dev-shm-usage',
+          //     '--disable-gpu',
+          //     '--no-zygote',
+          //     '--single-process'
+          //   ],
+      browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath(), // ⬅️ clé ici
+      headless: chromium.headless,
 
-    browser = await puppeteer.launch({
-      headless: true,
-      executablePath: CHROME_PATH,
-      args: [
-        '--no-sandbox',
-        '--disable-setuid-sandbox',
-        '--disable-dev-shm-usage',
-        '--disable-gpu',
-        '--no-zygote',
-        '--single-process'
-      ],
       defaultViewport: { width: 1280, height: 1800 }
     });
 

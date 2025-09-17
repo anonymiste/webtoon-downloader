@@ -1,0 +1,12 @@
+Erreur: Error: Failed to launch the browser process:  spawn C:\Users\ADN_CG_1\AppData\Local\Temp\chromium ENOENT
+
+stderr:
+
+
+TROUBLESHOOTING: https://pptr.dev/troubleshooting
+
+    at ChildProcess.onClose (C:\projects\script\DwSc\node_modules\@puppeteer\browsers\lib\cjs\launch.js:337:24)
+    at ChildProcess.emit (node:events:518:28)
+    at ChildProcess._handle.onexit (node:internal/child_process:291:12)
+    at onErrorNT (node:internal/child_process:483:16)
+    at process.processTicksAndRejections (node:internal/process/task_queues:90:21)
